@@ -1,9 +1,11 @@
 package com.cibertec.edu.app.controller;
 
+import com.cibertec.edu.app.dto.AlertaRequest;
 import com.cibertec.edu.app.dto.AlertaResponse;
 import com.cibertec.edu.app.service.AlertaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +18,12 @@ import java.util.List;
 public class AlertaController {
 
     private final AlertaService alertaService;
+
+    @PostMapping
+    @Operation(summary = "Crear una alerta y notificar por WebSocket")
+    public ResponseEntity<AlertaResponse> create(@Valid @RequestBody AlertaRequest request) {
+        return ResponseEntity.ok(alertaService.create(request));
+    }
 
     @GetMapping
     @Operation(summary = "Listar alertas activas")
