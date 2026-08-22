@@ -1,18 +1,18 @@
 # GeoRiesgoLite — Especificaciones de la API
 
-Documento de referencia para el consumo de la API REST y el canal WebSocket desde aplicaciones móviles (iOS / Android).
+Documento de referencia para el consumo de la API REST y el canal WebSocket desde la aplicación iOS (y Android).
 
 - **Base URL (HTTP):** `http://<host>:<port>` (puerto por defecto `8080`)
 - **Base URL (WebSocket):** `ws://<host>:<port>` (`wss://` en producción)
 - **Formato:** JSON (UTF-8)
-- **Autenticación:** Firebase ID Token — encabezado `Authorization: Bearer <Firebase ID Token>`
+- **Autenticación:** ninguna — todos los endpoints son públicos
 - **Swagger:** `http://localhost:8080/swagger-ui.html`
 
 ---
 
 ## 1. Resumen del proyecto
 
-Sistema de gestión de riesgos e incidentes georreferenciados. Backend monolítico en Spring Boot 4.1 / Java 21 / MySQL. Entidades de dominio: usuarios, tipos de riesgo, riesgos, alertas y reportes ciudadanos.
+Sistema de gestión de riesgos e incidentes georreferenciados. Backend monolítico demo en Spring Boot 4.1 / Java 21 / MySQL. El registro/login se hace en **Firebase Authentication dentro de la app iOS**; el backend no valida tokens ni guarda ningún UID de Firebase.
 
 ## 2. Stack tecnológico
 
@@ -21,70 +21,68 @@ Sistema de gestión de riesgos e incidentes georreferenciados. Backend monolíti
 | Java | 21 |
 | Spring Boot | 4.1.0 |
 | Persistencia | Spring Data JPA / MySQL |
-| Seguridad | Spring Security + Firebase Admin SDK (verificación de ID Token) |
 | WebSocket | Spring WebSocket (canal `/ws/alertas`) |
 | Docs | springdoc-openapi 2.8.8 |
 
 ## 3. Configuración (variables de entorno)
 
-El datasource y el puerto se configuran por variables de entorno:
-
 | Variable | Descripción |
 |---|---|
-| `MYSQLHOST` | Host de MySQL |
-| `MYSQLPORT` | Puerto de MySQL |
-| `MYSQLDATABASE` | Nombre de la base de datos |
-| `MYSQLUSER` | Usuario de MySQL |
-| `MYSQLPASSWORD` | Contraseña de MySQL |
+| `DB_URL` | URL JDBC completa de MySQL |
+| `DB_USERNAME` | Usuario de MySQL |
+| `DB_PASSWORD` | Contraseña de MySQL |
 | `PORT` | Puerto del servidor (por defecto `8080`) |
-| `FIREBASE_CREDENTIALS_PATH` | Ruta al JSON de la cuenta de servicio de Firebase |
 
 `spring.jpa.hibernate.ddl-auto=update` crea/actualiza las tablas automáticamente, pero la base de datos debe existir.
 
-## 4. Autenticación (Firebase)
+## 4. Identificación del usuario
 
-- Firebase Authentication es el responsable del registro y login. La app móvil obtiene un **Firebase ID Token** y lo envía en cada llamada protegida: `Authorization: Bearer <Firebase ID Token>`.
-- El backend valida el token con Firebase Admin SDK y resuelve el `Usuario` de MySQL por `firebaseUid` (o por `email` durante la migración). Si el usuario no existe, se crea automáticamente con `rol=VECINO`.
-- El rol (`VECINO`/`ADMIN`) lo controla el backend; nunca se confía en un rol enviado por el cliente.
-- Endpoints legacy `/api/auth/register` y `/api/auth/login` (usuario/contraseña) siguen existiendo por migración, pero su JWT ya no es aceptado por el backend.
+No hay autenticación. El backend identifica al usuario mediante un `usuarioId` explícito que la app envía en el body o como query param. Ejemplos:
+
+- `GET /api/usuarios/me?usuarioId=1`
+- `GET /api/reportes/mis-reportes?usuarioId=1`
+- `POST /api/reportes` → `datos.usuarioId`
 
 ---
 
 ## 5. Endpoints REST
 
-Leyenda: **Público** = sin token, **Auth** = requiere token.
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/usuarios/me?usuarioId=` | Perfil de un usuario por id |
+| PUT | `/api/usuarios/me` | Actualizar nombre (body: `usuarioId` + `nombre`) |
+| GET | `/api/tipos-riesgo` | Listar tipos de riesgo |
+| GET | `/api/tipos-riesgo/{id}` | Detalle de tipo de riesgo |
+| GET | `/api/riesgos` | Listar riesgos (`?tipo=&nivel=`) |
+| GET | `/api/riesgos/{id}` | Detalle de riesgo |
+| POST | `/api/reportes` | Crear reporte ciudadano (multipart) |
+| GET | `/api/reportes/mis-reportes?usuarioId=` | Listar reportes de un usuario |
+| GET | `/api/reportes/{id}` | Detalle de reporte |
+| GET | `/api/alertas` | Listar alertas activas |
+| POST | `/api/alertas` | Crear alerta (notifica por WebSocket) |
+| GET | `/api/alertas/{id}` | Detalle de alerta |
+| WS | `/ws/alertas` | WebSocket: notificaciones en tiempo real |
 
-| Método | Ruta | Acceso | Descripción |
-|---|---|---|---|
-| POST | `/api/auth/register` | Público | Registro de usuario |
-| POST | `/api/auth/login` | Público | Login (devuelve JWT) |
-| GET | `/api/usuarios/me` | Auth | Perfil del usuario autenticado |
-| PUT | `/api/usuarios/me` | Auth | Actualizar nombre del usuario |
-| GET | `/api/tipos-riesgo` | Público | Listar tipos de riesgo |
-| GET | `/api/tipos-riesgo/{id}` | Público | Detalle de tipo de riesgo |
-| GET | `/api/riesgos` | Público | Listar riesgos (`?tipo=&nivel=`) |
-| GET | `/api/riesgos/{id}` | Público | Detalle de riesgo |
-| POST | `/api/reportes` | Auth (VECINO/ADMIN) | Crear reporte ciudadano (multipart) |
-| GET | `/api/reportes/{id}` | Auth | Detalle de reporte |
-| GET | `/api/alertas` | Público | Listar alertas activas |
-| POST | `/api/alertas` | ADMIN | Crear alerta (notifica por WebSocket) |
-| GET | `/api/alertas/{id}` | Auth | Detalle de alerta |
+### 5.1 Usuarios
 
-### 5.1 Auth (legacy)
+**GET `/api/usuarios/me?usuarioId=1`**
 
-`/api/auth/register` y `/api/auth/login` son **endpoints legacy** de migración (usuario/contraseña). El flujo principal es Firebase: la app se registra/loguea en Firebase y usa el Firebase ID Token en las llamadas protegidas.
-
-**Respuesta de login/registro (legacy):** `LoginResponse`
+Respuesta (`UsuarioDto`):
 
 ```json
 {
-  "token": "<JWT legacy, ya no aceptado por el backend>",
-  "usuario": {
-    "id": 1,
-    "nombre": "Juan Pérez",
-    "email": "juan@correo.com",
-    "rol": "VECINO"
-  }
+  "id": 1,
+  "nombre": "Juan Pérez",
+  "email": "juan@correo.com"
+}
+```
+
+**PUT `/api/usuarios/me`**
+
+```json
+{
+  "usuarioId": 1,
+  "nombre": "Juan Actualizado"
 }
 ```
 
@@ -107,6 +105,7 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 
 ```json
 {
+  "usuarioId": 1,
   "tipoRiesgoId": 1,
   "descripcion": "Incendio en la zona norte",
   "latitud": -12.0464,
@@ -114,9 +113,13 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 }
 ```
 
+**GET `/api/reportes/mis-reportes?usuarioId=1`**
+
+Devuelve una lista de `ReporteResponse`.
+
 ### 5.4 Alertas
 
-**POST `/api/alertas`** (ADMIN) — crea una alerta y la notifica a todos los clientes conectados por WebSocket.
+**POST `/api/alertas`** — crea una alerta y la notifica a todos los clientes conectados por WebSocket.
 
 ```json
 {
@@ -173,46 +176,24 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 
 ### 7.1 `UsuarioDto`
 
-| Campo | Tipo | Notas |
-|---|---|---|
-| `id` | Long | |
-| `nombre` | String | |
-| `email` | String | |
-| `rol` | String | enum `Rol` (`VECINO`/`ADMIN`) |
-
-```json
-{ "id": 1, "nombre": "Juan Pérez", "email": "juan@correo.com", "rol": "VECINO" }
-```
-
-### 7.2 `LoginResponse`
-
 | Campo | Tipo |
 |---|---|
-| `token` | String |
-| `usuario` | `UsuarioDto` |
+| `id` | Long |
+| `nombre` | String |
+| `email` | String |
 
-### 7.3 `RegisterRequest`
+```json
+{ "id": 1, "nombre": "Juan Pérez", "email": "juan@correo.com" }
+```
 
-| Campo | Tipo | Validación |
-|---|---|---|
-| `nombre` | String | obligatorio |
-| `email` | String | obligatorio, formato email |
-| `password` | String | obligatorio, mín. 6 caracteres |
-
-### 7.4 `LoginRequest`
+### 7.2 `UpdateUsuarioRequest`
 
 | Campo | Tipo | Validación |
 |---|---|---|
-| `email` | String | obligatorio, formato email |
-| `password` | String | obligatorio |
-
-### 7.5 `UpdateUsuarioRequest`
-
-| Campo | Tipo | Validación |
-|---|---|---|
+| `usuarioId` | Long | obligatorio |
 | `nombre` | String | obligatorio |
 
-### 7.6 `TipoRiesgoResponse`
+### 7.3 `TipoRiesgoResponse`
 
 | Campo | Tipo |
 |---|---|
@@ -232,7 +213,7 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 }
 ```
 
-### 7.7 `RiesgoResponse`
+### 7.4 `RiesgoResponse`
 
 | Campo | Tipo | Notas |
 |---|---|---|
@@ -247,16 +228,17 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 | `fechaActualizacion` | String (ISO-8601) | nullable |
 | `activo` | Boolean | |
 
-### 7.8 `ReporteRequest`
+### 7.5 `ReporteRequest`
 
 | Campo | Tipo | Validación |
 |---|---|---|
+| `usuarioId` | Long | obligatorio |
 | `tipoRiesgoId` | Long | obligatorio |
 | `descripcion` | String | obligatorio |
 | `latitud` | Double | obligatorio |
 | `longitud` | Double | obligatorio |
 
-### 7.9 `ReporteResponse`
+### 7.6 `ReporteResponse`
 
 | Campo | Tipo | Notas |
 |---|---|---|
@@ -270,7 +252,7 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 | `fechaRegistro` | String (ISO-8601) | |
 | `estado` | String | enum `EstadoReporte` |
 
-### 7.10 `AlertaResponse`
+### 7.7 `AlertaResponse`
 
 | Campo | Tipo | Notas |
 |---|---|---|
@@ -284,7 +266,7 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 | `activa` | Boolean | |
 | `riesgoId` | Long | nullable |
 
-### 7.11 `AlertaRequest` (crear alerta)
+### 7.8 `AlertaRequest` (crear alerta)
 
 | Campo | Tipo | Validación |
 |---|---|---|
@@ -296,7 +278,7 @@ Filtros opcionales: `tipo` (id de tipo de riesgo) y `nivel` (BAJO, MODERADO, ALT
 | `longitud` | Double | obligatorio |
 | `riesgoId` | Long | opcional |
 
-### 7.12 `AlertaEvent` (mensaje WebSocket)
+### 7.9 `AlertaEvent` (mensaje WebSocket)
 
 | Campo | Tipo |
 |---|---|
@@ -318,12 +300,6 @@ BAJO, MODERADO, ALTO, CRITICO
 
 ```
 PENDIENTE, VERIFICADO, DESCARTADO
-```
-
-### `Rol`
-
-```
-VECINO, ADMIN
 ```
 
 ### Tipos de riesgo semilla
@@ -352,8 +328,6 @@ Todos los errores devuelven un objeto `ErrorResponse`:
 
 | Código | Significado |
 |---|---|
-| 400 | Validación fallida / credenciales inválidas / correo ya registrado |
-| 401 | Token ausente o inválido |
-| 403 | Usuario autenticado sin permisos (rol insuficiente) |
+| 400 | Validación fallida |
 | 404 | Recurso no encontrado |
 | 500 | Error interno del servidor |

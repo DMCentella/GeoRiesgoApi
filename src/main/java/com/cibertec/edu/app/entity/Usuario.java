@@ -1,6 +1,5 @@
 package com.cibertec.edu.app.entity;
 
-import com.cibertec.edu.app.enums.Rol;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -17,21 +16,11 @@ public class Usuario {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "firebase_uid", unique = true)
-    private String firebaseUid;
-
     @Column(nullable = false)
     private String nombre;
 
     @Column(nullable = false, unique = true)
     private String email;
-
-    @Column
-    private String password;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Rol rol;
 
     @Column(nullable = false)
     private LocalDateTime fechaRegistro;
@@ -46,9 +35,6 @@ public class Usuario {
         }
         if (activo == null) {
             activo = true;
-        }
-        if (rol == null) {
-            rol = Rol.VECINO;
         }
     }
 }

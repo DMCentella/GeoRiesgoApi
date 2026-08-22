@@ -26,9 +26,11 @@ public class ReporteService {
 
     private final ReporteRepository reporteRepository;
     private final TipoRiesgoService tipoRiesgoService;
+    private final UsuarioService usuarioService;
 
-    public ReporteResponse create(Usuario usuario, ReporteRequest request, MultipartFile foto) {
+    public ReporteResponse create(ReporteRequest request, MultipartFile foto) {
         TipoRiesgo tipoRiesgo = tipoRiesgoService.getEntityById(request.getTipoRiesgoId());
+        Usuario usuario = usuarioService.findById(request.getUsuarioId());
 
         Reporte reporte = Reporte.builder()
                 .usuario(usuario)
@@ -55,8 +57,8 @@ public class ReporteService {
         return toDto(reporte);
     }
 
-    public List<ReporteResponse> findByUsuario(Usuario usuario) {
-        return reporteRepository.findByUsuarioId(usuario.getId()).stream()
+    public List<ReporteResponse> findByUsuarioId(Long usuarioId) {
+        return reporteRepository.findByUsuarioId(usuarioId).stream()
                 .map(this::toDto)
                 .toList();
     }
@@ -82,7 +84,6 @@ public class ReporteService {
                 .id(r.getUsuario().getId())
                 .nombre(r.getUsuario().getNombre())
                 .email(r.getUsuario().getEmail())
-                .rol(r.getUsuario().getRol() != null ? r.getUsuario().getRol().name() : null)
                 .build();
 
         return ReporteResponse.builder()

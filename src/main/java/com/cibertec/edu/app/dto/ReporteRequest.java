@@ -7,6 +7,9 @@ import lombok.Data;
 @Data
 public class ReporteRequest {
 
+    @NotNull(message = "El id de usuario es obligatorio")
+    private Long usuarioId;
+
     @NotNull(message = "El tipo de riesgo es obligatorio")
     private Long tipoRiesgoId;
 
