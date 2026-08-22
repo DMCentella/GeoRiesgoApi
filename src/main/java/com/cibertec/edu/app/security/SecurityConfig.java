@@ -23,7 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final FirebaseAuthenticationFilter firebaseAuthenticationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -43,10 +43,10 @@ public class SecurityConfig {
                             "/ws/**"
                     ).permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/alertas").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/reportes").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/alertas").hasRole("ADMIN")
                     .anyRequest().authenticated()
             )
-            .addFilterBefore(jwtAuthenticationFilter,
+            .addFilterBefore(firebaseAuthenticationFilter,
                     UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

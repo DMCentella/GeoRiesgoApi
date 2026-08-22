@@ -82,6 +82,7 @@ public class ReporteService {
                 .id(r.getUsuario().getId())
                 .nombre(r.getUsuario().getNombre())
                 .email(r.getUsuario().getEmail())
+                .rol(r.getUsuario().getRol() != null ? r.getUsuario().getRol().name() : null)
                 .build();
 
         return ReporteResponse.builder()
