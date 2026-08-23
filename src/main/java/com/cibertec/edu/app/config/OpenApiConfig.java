@@ -2,6 +2,7 @@ package com.cibertec.edu.app.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,6 +15,11 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("GeoRiesgo Lite API")
                         .version("1.0")
-                        .description("API REST para gestión de riesgos e incidentes"));
+                        .description("API REST para gestión de riesgos e incidentes"))
+                .servers(java.util.List.of(
+                        new Server()
+                                .url("https://georiesgoapi-production.up.railway.app")
+                                .description("Servidor de producción")
+                ));
     }
 }
